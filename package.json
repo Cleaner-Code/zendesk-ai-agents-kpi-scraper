@@ -1,0 +1,11 @@
+{
+  "name": "zendesk-ai-agents-kpi-scraper",
+  "version": "1.0.0",
+  "description": "tbd",
+  "main": "index.js",
+  "author": "CleanerCode/Markus",
+  "license": "no license",
+  "dependencies": {
+    "playwright": "^1.57.0"
+  }
+}
