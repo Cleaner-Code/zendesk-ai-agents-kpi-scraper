@@ -4,3 +4,4 @@ html_pages/
 
 .env
 credentials.json
+cookies.json

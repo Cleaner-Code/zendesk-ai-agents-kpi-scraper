@@ -26,6 +26,14 @@ async function savePage(page, filename) {
     // 2. Open a new page (tab)
     const page = await browser.newPage();
 
+    // Load cookies if they exist
+    if (fs.existsSync("cookies.json")) {
+        const cookiesString = fs.readFileSync("cookies.json", "utf-8");
+        const cookies = JSON.parse(cookiesString);
+        await page.context().addCookies(cookies);
+        console.log("Loaded cookies from cookies.json");
+    }
+
     // 3. Navigate to the URL
     await page.goto(supportURL);
 
@@ -33,59 +41,73 @@ async function savePage(page, filename) {
     await page.waitForTimeout(1000);
     await page.waitForLoadState("domcontentloaded");
 
-    await page.screenshot({ path: "login.png", fullPage: true });
+    // Check if we're already logged in by looking for a known element based on url
+    if (page.url().startsWith(supportURL)) {
+        console.log("Already logged in via cookies.");
+    } else {
+        console.log("Not logged in, proceeding with login.");
 
-    // Read credentials from environment variables
-    const email = process.env.EMAIL;
-    const password = process.env.PASSWORD;
+        await page.screenshot({
+            path: "screenshots/login.png",
+            fullPage: true,
+        });
 
-    console.log(`Using email: ${email}`);
+        // Read credentials from environment variables
+        const email = process.env.EMAIL;
+        const password = process.env.PASSWORD;
 
-    // Fill in the login form
-    await page.fill('input[type="email"]', email);
-    await page.fill('input[type="password"]', password);
+        console.log(`Using email: ${email}`);
 
-    // Submit the login form (click the submit button)
-    await page.click('button[type="submit"]');
+        // Fill in the login form
+        await page.fill('input[type="email"]', email);
+        await page.fill('input[type="password"]', password);
 
-    // Wait for navigation after login
-    await page.waitForLoadState("load");
+        // Submit the login form (click the submit button)
+        await page.click('button[type="submit"]');
 
-    await savePage(page, "after_login.png");
+        // Wait for navigation after login
+        await page.waitForLoadState("load");
 
-    const twoFactorCode = question("2FA Code: ");
-    await page.fill("input", twoFactorCode);
-    await page.screenshot({
-        path: "screenshots/2fa_entered.png",
-        fullPage: true,
-    });
+        await savePage(page, "after_login.html");
 
-    await page.getByRole("button", { name: "Verify" }).click();
-    await page.waitForTimeout(1000);
+        const twoFactorCode = question("2FA Code: ");
+        await page.fill("input", twoFactorCode);
+        await page.screenshot({
+            path: "screenshots/2fa_entered.png",
+            fullPage: true,
+        });
 
-    // Wait for navigation after login
-    await page.waitForLoadState("load");
-    await page.waitForTimeout(500);
+        await page.getByRole("button", { name: "Verify" }).click();
+        await page.waitForTimeout(1000);
 
-    await savePage(page, "after_2fa.png");
-    await page.screenshot({
-        path: "screenshots/after_2fa.png",
-        fullPage: true,
-    });
+        // Wait for navigation after login
+        await page.waitForLoadState("load");
+        await page.waitForTimeout(500);
 
-    // 4. Navigate to the AI Agents page
-    await page.goto(gotoAIAgentsURL);
-    await page.waitForTimeout(500);
+        await savePage(page, "after_2fa.png");
+        await page.screenshot({
+            path: "screenshots/after_2fa.png",
+            fullPage: true,
+        });
 
-    // Wait for the page to load
-    await page.waitForLoadState("load");
-    await page.waitForTimeout(500);
+        // 4. Navigate to the AI Agents page
+        await page.goto(gotoAIAgentsURL);
+        await page.waitForTimeout(500);
 
-    await savePage(page, "ai_agents_page.png");
-    await page.screenshot({
-        path: "screenshots/ai_agents_page.png",
-        fullPage: true,
-    });
+        // Wait for the page to load
+        await page.waitForLoadState("load");
+        await page.waitForTimeout(500);
+
+        await savePage(page, "ai_agents_page.png");
+        await page.screenshot({
+            path: "screenshots/ai_agents_page.png",
+            fullPage: true,
+        });
+
+        // Save cookies to a file for future sessions
+        const cookies = await page.context().cookies();
+        fs.writeFileSync("cookies.json", JSON.stringify(cookies, null, 2));
+    }
 
     // 4. Navigate to the Conversation Logs page
     await page.goto(testURL);
@@ -104,6 +126,10 @@ async function savePage(page, filename) {
     const counterEl = page.locator(selector, { timeout: 30000 });
     const counterText = await counterEl.textContent();
     console.log(`Conversation counter text: ${counterText}`);
+
+    // Save cookies to a file for future sessions
+    const cookies = await page.context().cookies();
+    fs.writeFileSync("cookies.json", JSON.stringify(cookies, null, 2));
 
     // 5. Close the browser
     await browser.close();
