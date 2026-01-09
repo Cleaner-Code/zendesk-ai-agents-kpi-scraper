@@ -7,6 +7,7 @@
   "type": "module",
   "license": "UNLICENSED",
   "dependencies": {
+    "googleapis": "^170.0.0",
     "playwright": "^1.57.0",
     "readline-sync": "^1.4.10"
   },
