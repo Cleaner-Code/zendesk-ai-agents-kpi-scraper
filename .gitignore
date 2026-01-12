@@ -1,7 +1,7 @@
 node_modules/
 screenshots/
 html_pages/
+cache/
 
 .env
 credentials.json
-cookies.json

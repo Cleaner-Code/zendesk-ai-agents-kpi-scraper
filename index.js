@@ -1,139 +1,123 @@
-import { chromium } from "playwright";
-import { loadEnvFile } from "node:process";
-import { question } from "readline-sync";
+import { loadEnvFile } from "process";
 import fs from "fs";
+
+import { loadConfig } from "./src/config.js";
+import { createClient, getSpreadsheet } from "./src/spreadsheets.js";
+import {
+    compileURLsForMissingCounts,
+    findColumnsWithCounts,
+    getRowBounds,
+    validateValues,
+} from "./src/analysis.js";
 
 loadEnvFile(".env");
 
-const supportURL = "https://juskys.zendesk.com/agent";
-const gotoAIAgentsURL =
-    "https://juskys.zendesk.com/admin/channels/ai-agents-automation/ai-agents?ref=product_tray";
+async function getCurrentTable(googleSheets, config, executionID) {
+    const cacheFilePath =
+        `./cache/spreadsheet_${config.id}_${executionID}.json`;
+    if (fs.existsSync(cacheFilePath)) {
+        console.log(
+            `Loading spreadsheet data from cache file: ${cacheFilePath}`,
+        );
+        const cachedData = fs.readFileSync(cacheFilePath, "utf-8");
+        return JSON.parse(cachedData);
+    }
 
-const selector = '[data-tour-id="conversation__conversation-counter"]';
+    const spreadsheet = await getSpreadsheet(config, googleSheets);
+    fs.writeFileSync(
+        cacheFilePath,
+        JSON.stringify(spreadsheet, null, 2),
+    );
 
-async function savePage(page, filename) {
-    const pageHTML = await page.content();
-    fs.writeFileSync(`html_pages/${filename}`, pageHTML);
+    console.log(`Spreadsheet downloaded successfully.`);
+
+    return spreadsheet;
+}
+
+function getCompiledURLs(
+    config,
+    spreadsheet,
+    rowBounds,
+    filteredColumns,
+    executionID,
+) {
+    const cacheFilePath = `./cache/data_${config.id}_${executionID}.json`;
+    if (fs.existsSync(cacheFilePath)) {
+        console.log(
+            `Loading URL data from cache file: ${cacheFilePath}`,
+        );
+        const cachedData = fs.readFileSync(cacheFilePath, "utf-8");
+        return JSON.parse(cachedData);
+    }
+
+    const urls = compileURLsForMissingCounts(
+        spreadsheet.data.values,
+        rowBounds,
+        filteredColumns,
+    );
+    fs.writeFileSync(
+        cacheFilePath,
+        JSON.stringify(urls, null, 2),
+    );
+
+    console.log(`Data compiled successfully.`);
+
+    return urls;
+}
+
+async function main() {
+    if (process.argv.length < 3) {
+        console.error("Usage: node ./index.js <config name>");
+        process.exit(1);
+    }
+
+    const configName = process.argv[2];
+    if (configName) {
+        console.log(`Loading configuration: ${configName}`);
+    }
+
+    let executionToContinue = null;
+    if (process.argv.length > 3) {
+        executionToContinue = process.argv[3];
+    }
+
+    const executionID = executionToContinue ||
+        new Date().toISOString().replace(/[TZ:.-]/g, "");
+
+    const config = loadConfig(configName);
+    console.log(`Configuration '${config.id}' loaded successfully.`);
+
+    const googleSheets = await createClient();
+    const spreadsheet = await getCurrentTable(
+        googleSheets,
+        config,
+        executionID,
+    );
+
+    validateValues(spreadsheet.data.values, config);
+    const filteredColumns = findColumnsWithCounts(spreadsheet.data.values);
+    console.log(
+        `Found ${filteredColumns.length} columns with counts: `,
+        filteredColumns,
+    );
+    const rowBounds = getRowBounds(spreadsheet.data.values, config);
+    console.log(`Row bounds for date range: `, rowBounds);
+
+    const urls = getCompiledURLs(
+        config,
+        spreadsheet,
+        rowBounds,
+        filteredColumns,
+        executionID,
+    );
+    console.log(`Found ${urls.length} URLs to check`);
 }
 
 (async () => {
-    const destinationURL = process.argv[2];
-    if (destinationURL) {
-        console.log(`Navigating to destination URL: ${destinationURL}`);
+    try {
+        await main();
+    } catch (error) {
+        console.error("Error:", error.message, error.stack);
+        process.exit(1);
     }
-
-    // 1. Launch the browser
-    // 'headless: true' runs it without a visible UI (faster for scraping)
-    const browser = await chromium.launch({ headless: true });
-
-    // 2. Open a new page (tab)
-    const page = await browser.newPage();
-
-    // Load cookies if they exist
-    if (fs.existsSync("cookies.json")) {
-        const cookiesString = fs.readFileSync("cookies.json", "utf-8");
-        const cookies = JSON.parse(cookiesString);
-        await page.context().addCookies(cookies);
-        console.log("Loaded cookies from cookies.json");
-    }
-
-    // 3. Navigate to the URL
-    await page.goto(supportURL);
-
-    // Wait for all redirects to complete
-    await page.waitForTimeout(1000);
-    await page.waitForLoadState("domcontentloaded");
-
-    // Check if we're already logged in by looking for a known element based on url
-    if (page.url().startsWith(supportURL)) {
-        console.log("Already logged in via cookies.");
-    } else {
-        console.log("Not logged in, proceeding with login.");
-
-        await page.screenshot({
-            path: "screenshots/login.png",
-            fullPage: true,
-        });
-
-        // Read credentials from environment variables
-        const email = process.env.EMAIL;
-        const password = process.env.PASSWORD;
-
-        console.log(`Using email: ${email}`);
-
-        // Fill in the login form
-        await page.fill('input[type="email"]', email);
-        await page.fill('input[type="password"]', password);
-
-        // Submit the login form (click the submit button)
-        await page.click('button[type="submit"]');
-
-        // Wait for navigation after login
-        await page.waitForLoadState("load");
-
-        await savePage(page, "after_login.html");
-
-        const twoFactorCode = question("2FA Code: ");
-        await page.fill("input", twoFactorCode);
-        await page.screenshot({
-            path: "screenshots/2fa_entered.png",
-            fullPage: true,
-        });
-
-        await page.getByRole("button", { name: "Verify" }).click();
-        await page.waitForTimeout(1000);
-
-        // Wait for navigation after login
-        await page.waitForLoadState("load");
-        await page.waitForTimeout(500);
-
-        await savePage(page, "after_2fa.png");
-        await page.screenshot({
-            path: "screenshots/after_2fa.png",
-            fullPage: true,
-        });
-
-        // 4. Navigate to the AI Agents page
-        await page.goto(gotoAIAgentsURL);
-        await page.waitForTimeout(500);
-
-        // Wait for the page to load
-        await page.waitForLoadState("load");
-        await page.waitForTimeout(500);
-
-        await savePage(page, "ai_agents_page.png");
-        await page.screenshot({
-            path: "screenshots/ai_agents_page.png",
-            fullPage: true,
-        });
-
-        // Save cookies to a file for future sessions
-        const cookies = await page.context().cookies();
-        fs.writeFileSync("cookies.json", JSON.stringify(cookies, null, 2));
-    }
-
-    // 4. Navigate to the Conversation Logs page
-    await page.goto(destinationURL);
-    await page.waitForTimeout(500);
-
-    // Wait for the page to load
-    await page.waitForLoadState("load");
-    await page.waitForTimeout(500);
-
-    await savePage(page, "conversation_logs_page.png");
-    await page.screenshot({
-        path: "screenshots/conversation_logs_page.png",
-        fullPage: true,
-    });
-
-    const counterEl = page.locator(selector, { timeout: 30000 });
-    const counterText = await counterEl.textContent();
-    console.log(`Conversation counter text: ${counterText}`);
-
-    // Save cookies to a file for future sessions
-    const cookies = await page.context().cookies();
-    fs.writeFileSync("cookies.json", JSON.stringify(cookies, null, 2));
-
-    // 5. Close the browser
-    await browser.close();
 })();
