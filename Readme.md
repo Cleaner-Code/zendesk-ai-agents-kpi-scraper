@@ -32,7 +32,9 @@ The script caches:
   "id": "<NAME OF THE CONFIGURATION>",
   "username_env_variable_name": "<NAME OF THE ENV VARIABLE FOR THE USERNAME FOR THIS CONFIG>",
   "password_env_variable_name": "<NAME OF THE ENV VARIABLE FOR THE PASSWORD FOR THIS CONFIG>",
+  "subdomain": "<ZENDESK SUBDOMAIN>",
   "spreadsheet_id": "<ID OF THE GOOGLE SPREADSHEET>",
+  "sheet_name": "<NAME OF THE GOOGLE SPREADSHEET SHEET>",
   "dates_begin_at_row": "<ROW WHERE THE DATES/DATA BEGINS>"
 }
 ```
