@@ -10,8 +10,6 @@ const gotoAIAgentsURL =
     "https://juskys.zendesk.com/admin/channels/ai-agents-automation/ai-agents?ref=product_tray";
 
 const selector = '[data-tour-id="conversation__conversation-counter"]';
-const testURL =
-    "https://dashboard.ultimate.ai/bot/67c0523a0f50d83d930bcf19/conversations?endDate=2026-01-08+23%3A59&startDate=2026-01-08+00%3A00";
 
 async function savePage(page, filename) {
     const pageHTML = await page.content();
@@ -19,6 +17,11 @@ async function savePage(page, filename) {
 }
 
 (async () => {
+    const destinationURL = process.argv[2];
+    if (destinationURL) {
+        console.log(`Navigating to destination URL: ${destinationURL}`);
+    }
+
     // 1. Launch the browser
     // 'headless: true' runs it without a visible UI (faster for scraping)
     const browser = await chromium.launch({ headless: true });
@@ -110,7 +113,7 @@ async function savePage(page, filename) {
     }
 
     // 4. Navigate to the Conversation Logs page
-    await page.goto(testURL);
+    await page.goto(destinationURL);
     await page.waitForTimeout(500);
 
     // Wait for the page to load
