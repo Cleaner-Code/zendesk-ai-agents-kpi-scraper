@@ -7,14 +7,8 @@ export function parseDate(dateString) {
     }
 
     const [, , day, month, year] = match;
-    return new Date(
-        String(year).length === 2 ? `20${year}` : year,
-        month - 1,
-        day,
-        0,
-        0,
-        0,
-    );
+    const fourDigitYear = String(year).length === 2 ? `20${year}` : year;
+    return new Date(`${fourDigitYear}-${month}-${day}T00:00:00.000Z`);
 }
 
 export function getYesterdayDate() {

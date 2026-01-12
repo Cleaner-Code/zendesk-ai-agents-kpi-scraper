@@ -2,15 +2,26 @@ import { loadEnvFile } from "process";
 import fs from "fs";
 
 import { loadConfig } from "./src/config.js";
-import { createClient, getSpreadsheet } from "./src/spreadsheets.js";
+import {
+    createClient,
+    getSpreadsheet,
+    updateSpreadsheet,
+} from "./src/spreadsheets.js";
 import {
     compileURLsForMissingCounts,
     findColumnsWithCounts,
     getRowBounds,
     validateValues,
 } from "./src/analysis.js";
+import {
+    closeBrowserSession,
+    createBrowserSession,
+    scrapeCountFromURL,
+} from "./src/scraping.js";
 
 loadEnvFile(".env");
+
+const BATCH_SIZE = 8;
 
 async function getCurrentTable(googleSheets, config, executionID) {
     const cacheFilePath =
@@ -34,6 +45,11 @@ async function getCurrentTable(googleSheets, config, executionID) {
     return spreadsheet;
 }
 
+function saveData(config, executionID, data) {
+    const cacheFilePath = `./cache/data_${config.id}_${executionID}.json`;
+    fs.writeFileSync(cacheFilePath, JSON.stringify(data, null, 2));
+}
+
 function getCompiledURLs(
     config,
     spreadsheet,
@@ -55,14 +71,41 @@ function getCompiledURLs(
         rowBounds,
         filteredColumns,
     );
-    fs.writeFileSync(
-        cacheFilePath,
-        JSON.stringify(urls, null, 2),
-    );
+    saveData(config, executionID, urls);
 
     console.log(`Data compiled successfully.`);
 
     return urls;
+}
+
+function parseCounterText(text) {
+    const match = text.match(/\d+/);
+    if (match) {
+        return parseInt(match[0]);
+    }
+    return 0;
+}
+
+async function scrapeBatch(batchSize, offset, page, urls, executionID, config) {
+    for (let i = offset; i < Math.min(offset + batchSize, urls.length); i++) {
+        const url = urls[i];
+
+        if (url.count !== null) {
+            console.log(
+                `Skipping '${url.url}' because it already has a count: ${url.count}`,
+            );
+            continue;
+        }
+
+        const count = await scrapeCountFromURL(page, url.url, config);
+        if (count === null) {
+            console.log(`Failed to scrape count for '${url.url}'`);
+            continue;
+        }
+        console.log(`Scraped count for '${url.url}': ${count}`);
+        url.count = parseCounterText(count);
+    }
+    saveData(config, executionID, urls);
 }
 
 async function main() {
@@ -111,6 +154,30 @@ async function main() {
         executionID,
     );
     console.log(`Found ${urls.length} URLs to check`);
+
+    const { browser, page } = await createBrowserSession(config);
+
+    let totalTime = 0;
+    const numberOfBatches = Math.ceil(urls.length / BATCH_SIZE);
+    for (let i = 0; i < numberOfBatches; i++) {
+        const startTime = Date.now();
+
+        console.log(`Scraping batch ${i + 1} of ${numberOfBatches}...`);
+        const offset = i * BATCH_SIZE;
+        await scrapeBatch(BATCH_SIZE, offset, page, urls, executionID, config);
+
+        const milliseconds = Date.now() - startTime;
+        totalTime += milliseconds;
+        console.log(
+            `Scraping batch ${i + 1} of ${numberOfBatches} took ${
+                milliseconds / 1000
+            }s. Total time: ${totalTime / 1000}s.`,
+        );
+    }
+
+    await updateSpreadsheet(config, googleSheets, urls);
+
+    await closeBrowserSession(browser);
 }
 
 (async () => {

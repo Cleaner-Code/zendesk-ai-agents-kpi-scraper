@@ -2,7 +2,8 @@
     "id": "playground_dev_only",
     "username_env_variable_name": "PLAYGROUND_USERNAME",
     "password_env_variable_name": "PLAYGROUND_PASSWORD",
+    "subdomain": "mllerhandelsgmbhcokg",
     "spreadsheet_id": "1Me4RqtMvlnovO-l8EGlMWU7SzR2eCd9_loJYJZaQkHI",
     "sheet_name": "Usecases",
-    "dates_begin_at_row": 7
+    "dates_begin_at_row": 41
 }

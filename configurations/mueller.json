@@ -1,0 +1,9 @@
+{
+    "id": "mueller",
+    "username_env_variable_name": "MUELLER_USERNAME",
+    "password_env_variable_name": "MUELLER_PASSWORD",
+    "subdomain": "mllerhandelsgmbhcokg",
+    "spreadsheet_id": "1AKeulSl1700fnREuPCaMMM7by2er-xZS_GFqVJ1HAa0",
+    "sheet_name": "Usecases",
+    "dates_begin_at_row": 26
+}

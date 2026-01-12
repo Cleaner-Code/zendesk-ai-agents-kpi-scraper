@@ -3,6 +3,15 @@ import fs from "fs";
 
 const KEY_FILE_PATH = "credentials.json";
 
+function numberToLetters(num) {
+    let letters = "";
+    while (num >= 0) {
+        letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[num % 26] + letters;
+        num = Math.floor(num / 26) - 1;
+    }
+    return letters;
+}
+
 export async function createClient() {
     if (fs.existsSync(KEY_FILE_PATH) === false) {
         throw new Error(
@@ -28,5 +37,26 @@ export async function getSpreadsheet(config, googleSheets) {
 
     console.log("response", response);
 
+    return response;
+}
+
+export async function updateSpreadsheet(config, googleSheets, data) {
+    const ranges = data.map(({ column, row, count }) => ({
+        range: `${config["sheet_name"]}!${numberToLetters(column)}${row}`,
+        values: [[count]],
+    }));
+
+    const request = {
+        spreadsheetId: config["spreadsheet_id"],
+        resource: {
+            data: ranges,
+            valueInputOption: "USER_ENTERED",
+        },
+    };
+
+    const response = await googleSheets.spreadsheets.values.batchUpdate(
+        request,
+    );
+    console.log(`Successfully updated ${data.length} cells.`);
     return response;
 }
