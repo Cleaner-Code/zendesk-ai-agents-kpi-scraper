@@ -30,14 +30,10 @@ export async function createClient() {
 }
 
 export async function getSpreadsheet(config, googleSheets) {
-    const response = await googleSheets.spreadsheets.values.get({
+    return await googleSheets.spreadsheets.values.get({
         spreadsheetId: config["spreadsheet_id"],
         range: `${config["sheet_name"]}!A1:ZZ`,
     });
-
-    console.log("response", response);
-
-    return response;
 }
 
 export async function updateSpreadsheet(config, googleSheets, data) {
